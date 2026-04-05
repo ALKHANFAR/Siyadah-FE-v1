@@ -17,8 +17,12 @@ export function SpotlightCard({ children, className = "" }: SpotlightCardProps) 
     const card = cardRef.current;
     if (!card) return;
     const rect = card.getBoundingClientRect();
-    mouseX.set(e.clientX - rect.left);
-    mouseY.set(e.clientY - rect.top);
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    mouseX.set(x);
+    mouseY.set(y);
+    card.style.setProperty("--mouse-x", `${x}px`);
+    card.style.setProperty("--mouse-y", `${y}px`);
   }
 
   return (

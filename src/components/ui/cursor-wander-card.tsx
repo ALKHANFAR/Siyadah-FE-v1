@@ -4,45 +4,74 @@ import { useRef } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 
 interface CursorWanderCardProps {
-  children: React.ReactNode;
+  title: string;
+  value: string;
+  change?: string;
+  changeType?: "positive" | "negative" | "neutral";
+  icon: React.ReactNode;
   className?: string;
 }
 
 export function CursorWanderCard({
-  children,
+  title,
+  value,
+  change,
+  changeType = "neutral",
+  icon,
   className = "",
 }: CursorWanderCardProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0.5);
-  const y = useMotionValue(0.5);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
 
-  const springX = useSpring(x, { stiffness: 150, damping: 15 });
-  const springY = useSpring(y, { stiffness: 150, damping: 15 });
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [5, -5]), {
+    stiffness: 300,
+    damping: 30,
+  });
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-5, 5]), {
+    stiffness: 300,
+    damping: 30,
+  });
 
-  const rotateX = useTransform(springY, [0, 1], [3, -3]);
-  const rotateY = useTransform(springX, [0, 1], [-3, 3]);
-
-  function handleMouse(e: React.MouseEvent) {
-    const rect = ref.current?.getBoundingClientRect();
-    if (!rect) return;
-    x.set((e.clientX - rect.left) / rect.width);
-    y.set((e.clientY - rect.top) / rect.height);
+  function handleMouseMove(e: React.MouseEvent) {
+    const card = cardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    mouseX.set((e.clientX - rect.left) / rect.width - 0.5);
+    mouseY.set((e.clientY - rect.top) / rect.height - 0.5);
   }
 
-  function handleLeave() {
-    x.set(0.5);
-    y.set(0.5);
+  function handleMouseLeave() {
+    mouseX.set(0);
+    mouseY.set(0);
   }
+
+  const changeColor =
+    changeType === "positive"
+      ? "text-success"
+      : changeType === "negative"
+        ? "text-error"
+        : "text-muted-foreground";
 
   return (
     <motion.div
-      ref={ref}
-      onMouseMove={handleMouse}
-      onMouseLeave={handleLeave}
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       style={{ rotateX, rotateY, transformPerspective: 800 }}
-      className={`rounded-2xl border border-border bg-card p-6 transition-shadow hover:shadow-xl ${className}`}
+      className={`group relative rounded-2xl border border-border bg-card/50 p-6 backdrop-blur-sm transition-colors hover:border-accent/30 ${className}`}
     >
-      {children}
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-accent/5 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">{title}</span>
+          <span className="text-muted-foreground">{icon}</span>
+        </div>
+        <div className="mt-3 text-3xl font-bold text-foreground">{value}</div>
+        {change && (
+          <div className={`mt-1 text-sm ${changeColor}`}>{change}</div>
+        )}
+      </div>
     </motion.div>
   );
 }

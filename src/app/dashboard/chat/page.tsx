@@ -2,7 +2,9 @@
 
 import { useState, useCallback } from "react";
 import { AiAssistantChat, type ChatMessage } from "@/components/ui/ai-assistant-chat";
+import { toast } from "sonner";
 import { generateId } from "@/lib/utils";
+import { trackEvent } from "@/lib/analytics";
 
 const SUGGESTIONS = [
   { label: "حلل موقعي", onClick: () => {} },
@@ -30,6 +32,7 @@ export default function ChatPage() {
       };
 
       setMessages((prev) => [...prev, userMessage]);
+      trackEvent("chat_message_sent");
       setInput("");
       setIsLoading(true);
 
@@ -135,6 +138,7 @@ export default function ChatPage() {
           }
         }
       } catch {
+        toast.error("انقطع الاتصال — حاول مرة ثانية");
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];

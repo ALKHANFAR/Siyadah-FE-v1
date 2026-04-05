@@ -8,7 +8,9 @@ import { Search, Sparkles } from "lucide-react";
 import { VapourText } from "@/components/ui/vapour-text";
 import { PulseBeamsCTA } from "@/components/ui/pulse-beams-cta";
 import { CalendarCTA } from "@/components/ui/calendar-cta";
+import { toast } from "sonner";
 import { isValidUrl, normalizeUrl, generateId } from "@/lib/utils";
+import { trackEvent } from "@/lib/analytics";
 
 const SpiralAnimation = dynamic(
   () =>
@@ -35,6 +37,8 @@ export function HeroSection() {
     setLoading(true);
 
     try {
+      trackEvent("url_submitted", { url: normalized });
+
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -48,8 +52,12 @@ export function HeroSection() {
 
       sessionStorage.setItem(`report-${reportId}`, JSON.stringify(data));
       router.push(`/report/${reportId}`);
+      trackEvent("analysis_completed", { url: normalized });
+      toast.success("تم تحليل الموقع بنجاح ✅");
     } catch {
       setError("Could not analyze this website. Please try again.");
+      toast.error("ما قدرنا نحلل الموقع — حاول مرة ثانية");
+    } finally {
       setLoading(false);
     }
   }
@@ -104,7 +112,7 @@ export function HeroSection() {
                 setUrl(e.target.value);
                 setError("");
               }}
-              onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
+              onKeyDown={(e) => e.key === "Enter" && !loading && handleAnalyze()}
               placeholder="Paste your website URL..."
               className="flex-1 bg-transparent px-2 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none"
               disabled={loading}

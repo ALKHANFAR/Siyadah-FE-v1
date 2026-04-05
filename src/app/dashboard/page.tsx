@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/ui/item-overflow-badge";
 import { SpotlightCard } from "@/components/ui/spotlight-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonCard } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import { getDashboardProducts } from "@/config/products-catalog";
 
 interface AgentInfo {
@@ -37,12 +38,7 @@ export default function DashboardPage() {
 
     async function fetchAgents() {
       try {
-        const orchestratorUrl = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL;
-        if (!orchestratorUrl) {
-          setLoading(false);
-          return;
-        }
-        const res = await fetch(`${orchestratorUrl}/templates`);
+        const res = await fetch("/api/agents");
         if (res.ok) {
           const data = await res.json();
           const mapped = (data.flows || data || []).map(
@@ -56,7 +52,7 @@ export default function DashboardPage() {
           setAgents(mapped);
         }
       } catch {
-        // Orchestrator not available — show empty state
+        toast.error("ما قدرنا نجيب بيانات النظام");
       }
       setLoading(false);
     }

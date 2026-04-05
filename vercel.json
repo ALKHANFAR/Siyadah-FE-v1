@@ -1,6 +1,11 @@
 {
   "framework": "nextjs",
   "regions": ["iad1"],
+  "env": {
+    "ORCHESTRATOR_URL": "@orchestrator-url",
+    "ANTHROPIC_API_KEY": "@anthropic-api-key",
+    "FIRECRAWL_API_KEY": "@firecrawl-api-key"
+  },
   "headers": [
     {
       "source": "/api/(.*)",

@@ -135,9 +135,28 @@ export async function executeTool(
         orchestrator.getConnections(),
       ]);
 
+      if (!health.ok) {
+        return JSON.stringify({
+          system: "maintenance",
+          message: "النظام يمر بتحديث سريع. الأدوات متاحة بس الربط يحتاج دقائق.",
+          connections: [],
+          availableTools: getToolsSortedByTier().length,
+        });
+      }
+
+      const connList = connections.data || [];
+      const connectedNames = connList
+        .filter((c: any) => c.status === "ACTIVE")
+        .map((c: any) => c.displayName || c.pieceName);
+
       return JSON.stringify({
-        system: health.ok ? "online" : "offline",
-        connections: connections.data || [],
+        system: "online",
+        connections: connList,
+        connectedChannels: connectedNames,
+        availableTools: getToolsSortedByTier().length,
+        message: connectedNames.length > 0
+          ? `النظام شغال. القنوات المربوطة: ${connectedNames.join("، ")}`
+          : "النظام شغال. ما فيه قنوات مربوطة بعد — نحتاج نربط إيميلك أول.",
       });
     }
 
@@ -147,21 +166,49 @@ export async function executeTool(
         ? getToolsByDepartment(dept)
         : getToolsSortedByTier();
 
-      return JSON.stringify(
-        tools.map((t) => ({
+      const free = tools.filter(t => t.tier === 'free');
+      const freemium = tools.filter(t => t.tier === 'freemium');
+      const paid = tools.filter(t => t.tier === 'paid');
+
+      return JSON.stringify({
+        total: tools.length,
+        breakdown: {
+          free: free.length,
+          freemium: freemium.length,
+          paid: paid.length,
+        },
+        tools: tools.map((t) => ({
           name: t.displayNameAr,
           nameEn: t.displayNameEn,
-          tier: t.tier,
+          tier: t.tier === 'free' ? 'مجاني' : t.tier === 'freemium' ? 'محدود مجاناً' : 'متقدم',
           requiresOAuth: t.requiresOAuth,
           icon: t.icon,
-        }))
-      );
+          description: t.descriptionAr,
+        })),
+        note: dept
+          ? `عندك ${tools.length} أداة لقسم ${dept}`
+          : `عندك ${tools.length} أداة إجمالاً (${free.length} مجانية)`,
+      });
     }
 
     case "build_automation": {
       const template = input.template as string;
       const flowName = input.name as string;
       const config = (input.config as Record<string, unknown>) || {};
+
+      const healthCheck = await orchestrator.getHealth();
+      if (!healthCheck.ok) {
+        return JSON.stringify({
+          success: false,
+          needsSetup: true,
+          message: "أحتاج أتأكد من إعدادات النظام أول. خلني أجهّز لك الخطة وأنفذها أول ما يجهز.",
+          plan: {
+            name: flowName,
+            template: template,
+            description: `بنبني لك "${flowName}" — كل ما يجهز النظام بننفذه فوراً.`,
+          },
+        });
+      }
 
       const result = await orchestrator.buildDynamic({
         template,
@@ -172,16 +219,16 @@ export async function executeTool(
       if (!result.ok) {
         return JSON.stringify({
           success: false,
-          error:
-            result.error ||
-            "ما قدرت أبني الموظف الذكي. أحاول بطريقة ثانية...",
+          error: "ما قدرت أبني الموظف الذكي. خلني أحاول بطريقة ثانية...",
+          suggestion: "ممكن نحتاج نربط القنوات المطلوبة أول.",
         });
       }
 
       return JSON.stringify({
         success: true,
-        message: `تم بناء "${flowName}" بنجاح`,
+        message: `تم بناء "${flowName}" بنجاح ✅`,
         flowId: result.data?.id,
+        nextStep: "تبي أختبره الحين؟",
       });
     }
 

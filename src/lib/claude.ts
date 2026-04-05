@@ -51,8 +51,20 @@ ${comingSoon.map((p) => `- ${p.nameAr}: ${p.taglineAr}`).join("\n")}
   parts.push(productsSection);
 
   const toolsSection = `
-## الأدوات المتاحة (مرتبة: مجانية أول):
-${tools.map((t) => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn}) — ${t.tier === "free" ? "مجاني" : t.tier === "freemium" ? "محدود مجاناً" : "مدفوع"}`).join("\n")}
+## الأدوات المتاحة حالياً (${tools.length} أداة):
+
+### مجانية 100%:
+${tools.filter(t => t.tier === 'free').map(t => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn})`).join('\n')}
+
+### محدودة مجاناً:
+${tools.filter(t => t.tier === 'freemium').map(t => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn})`).join('\n')}
+
+### مدفوعة:
+${tools.filter(t => t.tier === 'paid').map(t => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn})`).join('\n')}
+
+ملاحظة: هذي الأدوات الأساسية المتاحة الآن. نظامنا يدعم ربط أدوات إضافية حسب احتياج العميل.
+لا تقول "600 أداة" — قل "${tools.length} أداة أساسية متاحة الآن".
+إذا العميل سأل عن أداة مو في القائمة — قل "هالأداة ممكن نضيفها لك. خلني أتحقق من التوافق."
 `;
   parts.push(toolsSection);
 

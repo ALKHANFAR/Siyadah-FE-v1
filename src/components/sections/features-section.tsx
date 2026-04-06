@@ -37,9 +37,9 @@ const FEATURES: TimelineItem[] = [
     icon: <BarChart3 size={24} />,
   },
   {
-    title: "600+ Integrations",
+    title: "14+ Smart Tools",
     description:
-      "Connect Gmail, Google Sheets, Telegram, WhatsApp, and 600+ other tools. Free tools first — 76% of our catalog is free.",
+      "Connect Gmail, Google Sheets, Drive, and more. Free tools first — most of our catalog is free and ready to use.",
     icon: <Shield size={24} />,
   },
   {

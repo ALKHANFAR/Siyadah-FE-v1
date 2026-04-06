@@ -88,13 +88,16 @@ export default function ChatPage() {
 
         const decoder = new TextDecoder();
         let fullText = "";
+        let sseBuffer = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
+          sseBuffer += chunk;
+          const lines = sseBuffer.split("\n");
+          sseBuffer = lines.pop() || "";
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
@@ -131,8 +134,8 @@ export default function ChatPage() {
                     return updated;
                   });
                 }
-              } catch {
-                // Skip malformed SSE data
+              } catch (e) {
+                console.warn("[SSE] Malformed data, buffering:", data?.substring(0, 50));
               }
             }
           }

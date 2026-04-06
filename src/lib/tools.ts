@@ -48,22 +48,36 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
   {
     name: "build_automation",
     description:
-      "Build a new smart employee (automation). Specify the template type and configuration.",
+      "بناء موظف ذكي (أتمتة) جديد. استخدمها لما العميل يطلب بناء أتمتة أو تنبيه أو نظام تلقائي.",
     input_schema: {
       type: "object" as const,
       properties: {
         template: {
           type: "string",
+          enum: [
+            "webhook_to_email",
+            "webhook_to_sheet",
+            "webhook_to_sheet_and_email",
+            "support_auto_reply",
+            "marketing_welcome",
+            "ops_log_report",
+            "lead_notify_and_confirm",
+            "scheduled_report",
+          ],
           description:
-            "Template ID: webhook_to_email, webhook_to_sheet, webhook_to_sheet_and_email, support_auto_reply, marketing_welcome, ops_log_report, lead_notify_and_confirm, scheduled_report",
+            "نوع القالب: webhook_to_email (تنبيه إيميل), webhook_to_sheet (حفظ بيانات), webhook_to_sheet_and_email (حفظ+تنبيه), support_auto_reply (رد تلقائي), marketing_welcome (ترحيب), ops_log_report (تقرير), lead_notify_and_confirm (ليدات كامل), scheduled_report (تقرير يومي)",
         },
         name: {
           type: "string",
-          description: "Name for this automation",
+          description: "اسم الموظف الذكي بالعربي",
         },
-        config: {
-          type: "object",
-          description: "Template-specific configuration",
+        recipient_email: {
+          type: "string",
+          description: "إيميل المستلم للتنبيهات (إذا مو محدد يُستخدم الافتراضي)",
+        },
+        spreadsheet_id: {
+          type: "string",
+          description: "معرف جدول Google Sheets (اختياري — يُنشأ تلقائياً إذا فاضي)",
         },
       },
       required: ["template", "name"],
@@ -194,7 +208,8 @@ export async function executeTool(
     case "build_automation": {
       const template = input.template as string;
       const flowName = input.name as string;
-      const config = (input.config as Record<string, unknown>) || {};
+      const recipientEmail = (input.recipient_email || input.email || "a@siyadah-ai.com") as string;
+      const spreadsheetId = (input.spreadsheet_id || "") as string;
 
       const healthCheck = await orchestrator.getHealth();
       if (!healthCheck.ok) {
@@ -204,22 +219,30 @@ export async function executeTool(
           message: "أحتاج أتأكد من إعدادات النظام أول. خلني أجهّز لك الخطة وأنفذها أول ما يجهز.",
           plan: {
             name: flowName,
-            template: template,
+            template,
             description: `بنبني لك "${flowName}" — كل ما يجهز النظام بننفذه فوراً.`,
           },
         });
       }
 
-      const result = await orchestrator.buildDynamic({
+      const config: Record<string, string> = {};
+      if (template.includes("email") || template.includes("notify") || template.includes("report") || template.includes("welcome") || template.includes("support")) {
+        config.recipient_email = recipientEmail;
+      }
+      if (template.includes("sheet") || template.includes("log") || template.includes("lead_notify")) {
+        config.spreadsheet_id = spreadsheetId;
+      }
+
+      const result = await orchestrator.buildAndDeploy({
         template,
         name: flowName,
-        projectId: "ou4jOTA4KMnDrzOVsKWvd",
-        connectionExternalIds: {
+        project_id: "ou4jOTA4KMnDrzOVsKWvd",
+        connection_ids: {
           gmail: "MKlKHKfL6OwZ7oqt0nt5h",
           "google-sheets": "TtUKW8AMWsMBlY7ayqocf",
           "google-drive": "J0iUwaxY1Hc6vSo3LY6o6",
         },
-        ...config,
+        config,
       });
 
       if (!result.ok) {
@@ -227,13 +250,15 @@ export async function executeTool(
           success: false,
           error: "ما قدرت أبني الموظف الذكي. خلني أحاول بطريقة ثانية...",
           suggestion: "ممكن نحتاج نربط القنوات المطلوبة أول.",
+          details: result.error,
         });
       }
 
       return JSON.stringify({
         success: true,
         message: `تم بناء "${flowName}" بنجاح ✅`,
-        flowId: result.data?.id,
+        flowId: result.data?.flow?.id,
+        link: result.data?.flow?.link,
         nextStep: "تبي أختبره الحين؟",
       });
     }

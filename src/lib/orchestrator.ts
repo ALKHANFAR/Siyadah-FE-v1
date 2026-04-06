@@ -74,31 +74,18 @@ export async function getPieceSchema(pieceName: string) {
   );
 }
 
-export async function buildDynamic(flowConfig: Record<string, unknown>) {
-  const buildResult = await request<{ id: string; name: string }>(
-    "/v2/build-dynamic",
-    {
-      method: "POST",
-      body: JSON.stringify(flowConfig),
-    }
-  );
-
-  if (!buildResult.ok || !buildResult.data) return buildResult;
-
-  const flowId = buildResult.data.id;
-
-  const verifyResult = await request<Record<string, unknown>>(
-    `/templates/${flowId}`
-  );
-  if (!verifyResult.ok) {
-    return {
-      ok: false,
-      error: getErrorMessage("automation_build_failed"),
-    };
-  }
-
-  return buildResult;
+export async function buildAndDeploy(flowConfig: Record<string, unknown>) {
+  return request<{
+    success: boolean;
+    flow?: { id: string; name: string; link: string };
+    message?: string;
+  }>("/v2/build-and-deploy", {
+    method: "POST",
+    body: JSON.stringify(flowConfig),
+  });
 }
+
+export const buildDynamic = buildAndDeploy;
 
 export async function manageFlow(
   flowId: string,

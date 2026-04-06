@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { streamChat, type ChatMessage } from "@/lib/claude";
+import { streamChat, updateDNA, type ChatMessage } from "@/lib/claude";
 import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
@@ -27,14 +27,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (companyContext) {
+      updateDNA(companyContext);
+    }
+
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of streamChat(
-            messages as ChatMessage[],
-            companyContext
+            messages as ChatMessage[]
           )) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`)

@@ -127,6 +127,48 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
       required: ["flow_id"],
     },
   },
+  {
+    name: "extract_facts",
+    description:
+      "استخدمها تلقائياً لما تسمع معلومة جديدة عن الشركة — مثل عدد الموظفين، نوع المنتجات، التحديات، الأهداف. هذي تحفظ المعلومات عشان تتذكرها في المحادثات القادمة.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        facts: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "قائمة الحقائق المكتشفة — مثل: 'عندهم 5 موظفين', 'يبيعون أونلاين', 'مشكلتهم الرئيسية التوصيل'",
+        },
+        sector: {
+          type: "string",
+          description:
+            "القطاع إذا اتضح — مثل: restaurant, clinic, ecommerce, saas",
+        },
+        companyName: {
+          type: "string",
+          description: "اسم الشركة إذا ذُكر",
+        },
+      },
+      required: ["facts"],
+    },
+  },
+  {
+    name: "suggest_tools",
+    description:
+      "اقترح أفضل الأدوات والأتمتات حسب قطاع العميل. استخدمها لما العميل يسأل 'وش تقترح؟' أو 'وش أحتاج؟'",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        sector: {
+          type: "string",
+          description:
+            "القطاع — مثل: restaurant, clinic, ecommerce, saas, general",
+        },
+      },
+      required: ["sector"],
+    },
+  },
 ];
 
 export async function executeTool(
@@ -290,6 +332,45 @@ export async function executeTool(
         message: result.ok
           ? "الاختبار نجح ✅"
           : "الاختبار ما نجح. ممكن فيه مشكلة بالإعدادات.",
+      });
+    }
+
+    case "extract_facts": {
+      const newFacts = input.facts as string[];
+      const sector = input.sector as string | undefined;
+      const companyName = input.companyName as string | undefined;
+
+      // Dynamic import to avoid circular dependency (claude.ts imports from tools.ts)
+      const { updateDNA, getDNA } = await import("@/lib/claude");
+      const dna = getDNA();
+
+      const mergedFacts = [...new Set([...dna.facts, ...newFacts])];
+      const updates: Record<string, unknown> = { facts: mergedFacts };
+
+      if (sector) updates.sector = sector;
+      if (companyName) updates.name = companyName;
+
+      updateDNA(updates);
+
+      return JSON.stringify({
+        success: true,
+        message: `تم حفظ ${newFacts.length} حقيقة جديدة`,
+        totalFacts: mergedFacts.length,
+      });
+    }
+
+    case "suggest_tools": {
+      const sector = (input.sector || "general") as string;
+      const { suggestTools } = await import("@/config/tools/tools-selector");
+      const suggestions = suggestTools(sector);
+
+      return JSON.stringify({
+        sector,
+        suggestions: suggestions.map((s) => ({
+          template: s.template,
+          name: s.name,
+          reason: s.reason,
+        })),
       });
     }
 

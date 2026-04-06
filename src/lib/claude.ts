@@ -1,74 +1,128 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { SYSTEM_PROMPT } from "@/config/prompts/system-prompt";
-import { CHAT_PROMPT } from "@/config/prompts/chat-prompt";
-import { DOSING_PROMPT } from "@/config/prompts/dosing-prompt";
-import { AUTOMATION_PROMPT } from "@/config/prompts/automation-prompt";
-import { CONNECTION_PROMPT } from "@/config/prompts/connection-prompt";
-import { getSectorPrompt } from "@/config/prompts/sector-prompts";
-import { buildAbsorberPrompt } from "@/config/prompts/absorber-prompt";
+import { type CompanyDNA, getDefaultDNA } from "@/config/company-dna";
+import { getSectorProfile } from "@/config/sectors/sector-language";
+import { suggestTools } from "@/config/tools/tools-selector";
+import { getEnabledTools } from "@/config/tools-catalog";
 import {
   getReleasedProducts,
   getComingSoonProducts,
 } from "@/config/products-catalog";
-import { getToolsSortedByTier } from "@/config/tools-catalog";
 import { CLAUDE_TOOLS, executeTool } from "./tools";
 
-interface CompanyContext {
-  name: string;
-  sector: string;
-  country: string;
-  strengths: string[];
-  painPoints: string[];
-  opportunities: string[];
-  healthScore: number;
+// In-memory DNA — resets per serverless cold start.
+// Future (SaaS): persist in DB per client.
+let currentDNA: CompanyDNA = getDefaultDNA();
+
+export function updateDNA(partial: Partial<CompanyDNA>) {
+  currentDNA = {
+    ...currentDNA,
+    ...partial,
+    lastInteraction: new Date().toISOString(),
+  };
 }
 
-function buildSystemPrompt(companyContext?: CompanyContext): string {
+export function getDNA(): CompanyDNA {
+  return currentDNA;
+}
+
+function buildSystemPrompt(): string {
+  const dna = currentDNA;
+  const sector = getSectorProfile(dna.sector);
+  const tools = getEnabledTools();
+  const suggestions = suggestTools(dna.sector);
   const released = getReleasedProducts();
-  const comingSoon = getComingSoonProducts();
-  const tools = getToolsSortedByTier();
+  const coming = getComingSoonProducts();
 
-  const parts = [SYSTEM_PROMPT, CHAT_PROMPT, DOSING_PROMPT];
+  const identity = `
+أنت سيادة — نظام تشغيل الشركات بالذكاء الاصطناعي.
+أنت مستشار أعمال سعودي خبير — مباشر، جريء، تفهم السوق السعودي.
+تتكلم باللهجة السعودية المهنية.
+اسمك "سيادة" — مو Claude ولا ChatGPT.
+`;
 
-  if (companyContext) {
-    parts.push(buildAbsorberPrompt(companyContext));
-    parts.push(getSectorPrompt(companyContext.sector));
+  const clientKnowledge = dna.name
+    ? `
+## العميل الحالي:
+- الشركة: ${dna.name}
+- القطاع: ${sector.nameAr}
+- الحجم: ${dna.size}
+${dna.description ? `- الوصف: ${dna.description}` : ""}
+- الفجوات: ${dna.gaps.length > 0 ? dna.gaps.join("، ") : "لم تُكتشف بعد"}
+- نقاط القوة: ${dna.strengths.length > 0 ? dna.strengths.join("، ") : "لم تُكتشف بعد"}
+- حقائق مكتسبة: ${dna.facts.length > 0 ? dna.facts.join("، ") : "لا يوجد بعد"}
+- أتمتات مبنية: ${dna.automationsBuilt}
+`
+    : `
+## لا يوجد عميل محدد بعد
+اسأل عن اسم الشركة أو رابط الموقع عشان تبدأ.
+`;
+
+  const sectorLanguage = `
+## لغتك مع هالعميل:
+- الألم: "${sector.pain}"
+- الحلم: "${sector.dream}"
+- استخدم هالكلمات: ${sector.words.join("، ")}
+- التحية: "${sector.greeting}"
+- مؤشرات الأداء: ${sector.kpis.join("، ")}
+`;
+
+  let dosingDetail = "";
+  switch (dna.stage) {
+    case "day1":
+      dosingDetail = `
+- اكشف فجوة واحدة فقط + قدّم حل فوري
+- لا تكشف كل الفجوات!
+- النبرة: "وش ذا السحر!"
+- ابنِ أول أتمتة مجانية`;
+      break;
+    case "day3":
+      dosingDetail = `
+- أظهر نتائج الحل الأول (أرقام إذا ممكن)
+- النبرة: "فعلاً يشتغل!"
+- اقترح فجوة ثانية`;
+      break;
+    case "week1":
+      dosingDetail = `
+- اكشف فجوة ثانية ببيانات حقيقية
+- النبرة: "كيف عرف!"
+- ابدأ تقترح أدوات متقدمة`;
+      break;
+    case "month1":
+      dosingDetail = `
+- افتح كل الأدوات والمسارات
+- النبرة: "ما أقدر أعيش بدونه"
+- اقترح باقات متقدمة`;
+      break;
   }
 
-  parts.push(AUTOMATION_PROMPT);
-  parts.push(CONNECTION_PROMPT);
-
-  const productsSection = `
-## المنتجات المتاحة حالياً:
-${released.map((p) => `- ${p.nameAr}: ${p.taglineAr}`).join("\n")}
-
-## منتجات قادمة قريباً:
-${comingSoon.map((p) => `- ${p.nameAr}: ${p.taglineAr}`).join("\n")}
-
-عند طلب منتج مُطلق: نفّذه فوراً باستخدام أدواتك.
-عند طلب منتج قادم: أخبر العميل إنه قيد التطوير وسجّل اهتمامه.
+  const dosing = `
+## نظام الجرعات (مهم جداً):
+المرحلة الحالية: ${dna.stage}
+${dosingDetail}
 `;
-  parts.push(productsSection);
 
   const toolsSection = `
-## الأدوات المتاحة حالياً (${tools.length} أداة):
-
-### مجانية 100%:
-${tools.filter(t => t.tier === 'free').map(t => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn})`).join('\n')}
-
-### محدودة مجاناً:
-${tools.filter(t => t.tier === 'freemium').map(t => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn})`).join('\n')}
-
-### مدفوعة:
-${tools.filter(t => t.tier === 'paid').map(t => `- ${t.icon} ${t.displayNameAr} (${t.displayNameEn})`).join('\n')}
-
-ملاحظة: هذي الأدوات الأساسية المتاحة الآن. نظامنا يدعم ربط أدوات إضافية حسب احتياج العميل.
-لا تقول "600 أداة" — قل "${tools.length} أداة أساسية متاحة الآن".
-إذا العميل سأل عن أداة مو في القائمة — قل "هالأداة ممكن نضيفها لك. خلني أتحقق من التوافق."
+## الأدوات المتاحة: ${tools.length} أداة
+## المنتجات المُطلقة: ${released.map((p) => p.nameAr).join("، ")}
+## قادم قريباً: ${coming.map((p) => p.nameAr).join("، ")}
+## الأتمتات المقترحة لهالقطاع:
+${suggestions.map((s, i) => `${i + 1}. ${s.name} (${s.template}) — ${s.reason}`).join("\n")}
 `;
-  parts.push(toolsSection);
 
-  return parts.join("\n\n---\n\n");
+  const rules = `
+## قواعد ذهبية:
+1. لا تقول "600 أداة" — قل "${tools.length} أداة"
+2. لا تكذب — إذا ما تعرف قل "خلني أتأكد"
+3. لا تقول "النظام معطل" — قل "خلني أشيك"
+4. إذا فشل بناء أتمتة → قل "فيه تحديث بسيط — خلني أجهزه لك"
+5. دائماً اقترح الخطوة التالية
+6. استخدم أداة extract_facts لما تسمع معلومة جديدة عن الشركة
+7. استخدم أداة build_automation بالقالب الأنسب للقطاع
+`;
+
+  return [identity, clientKnowledge, sectorLanguage, dosing, toolsSection, rules].join(
+    "\n"
+  );
 }
 
 export interface ChatMessage {
@@ -77,8 +131,7 @@ export interface ChatMessage {
 }
 
 export async function* streamChat(
-  messages: ChatMessage[],
-  companyContext?: CompanyContext
+  messages: ChatMessage[]
 ): AsyncGenerator<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -87,7 +140,7 @@ export async function* streamChat(
   }
 
   const client = new Anthropic({ apiKey });
-  const systemPrompt = buildSystemPrompt(companyContext);
+  const systemPrompt = buildSystemPrompt();
 
   const anthropicMessages: Anthropic.MessageParam[] = messages.map((m) => ({
     role: m.role,

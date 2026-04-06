@@ -144,7 +144,7 @@ export async function executeTool(
         });
       }
 
-      const connList = connections.data || [];
+      const connList = connections.data?.connections || (Array.isArray(connections.data) ? connections.data : []);
       const connectedNames = connList
         .filter((c: any) => c.status === "ACTIVE")
         .map((c: any) => c.displayName || c.pieceName);
@@ -213,6 +213,12 @@ export async function executeTool(
       const result = await orchestrator.buildDynamic({
         template,
         name: flowName,
+        projectId: "ou4jOTA4KMnDrzOVsKWvd",
+        connectionExternalIds: {
+          gmail: "MKlKHKfL6OwZ7oqt0nt5h",
+          "google-sheets": "TtUKW8AMWsMBlY7ayqocf",
+          "google-drive": "J0iUwaxY1Hc6vSo3LY6o6",
+        },
         ...config,
       });
 
@@ -234,7 +240,7 @@ export async function executeTool(
 
     case "list_automations": {
       const templates = await orchestrator.getTemplates();
-      return JSON.stringify(templates.data || []);
+      return JSON.stringify(templates.data?.templates || (Array.isArray(templates.data) ? templates.data : []));
     }
 
     case "manage_automation": {

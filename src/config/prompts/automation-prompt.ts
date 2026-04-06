@@ -6,9 +6,9 @@
 export const AUTOMATION_PROMPT = `## تعليمات بناء الأتمتات:
 
 ### القنوات المتصلة (Connection External IDs):
-- Gmail: 5zDkm97LpAUgp8OsbimXM
-- Sheets: 054jht0IDFOFascI8rl0s
-- Drive: Nj9Lhmfax988Pp8P82Xba
+- Gmail: MKlKHKfL6OwZ7oqt0nt5h
+- Sheets: TtUKW8AMWsMBlY7ayqocf
+- Drive: J0iUwaxY1Hc6vSo3LY6o6
 
 ### عند بناء أتمتة:
 1. حدد نوع الأتمتة (أي Template T1-T8 أو ديناميكي)

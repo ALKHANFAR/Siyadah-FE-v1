@@ -45,15 +45,17 @@ export async function getHealth() {
 }
 
 export async function getConnections() {
-  return request<
-    { id: string; pieceName: string; displayName: string; status: string }[]
-  >("/connections");
+  return request<{
+    connections: { id: string; externalId: string; pieceName: string; displayName: string; status: string }[];
+    count: number;
+  }>("/connections");
 }
 
 export async function getTemplates() {
-  return request<
-    { id: string; name: string; status: string; created: string }[]
-  >("/templates");
+  return request<{
+    templates: { id: string; name: string; status: string; created: string }[];
+    count: number;
+  }>("/templates");
 }
 
 export async function getTemplateById(id: string) {

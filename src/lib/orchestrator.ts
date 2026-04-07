@@ -26,10 +26,16 @@ async function request<T>(
     });
 
     if (!res.ok) {
-      const body = await res.text();
+      let errorDetail: string;
+      try {
+        const errorJson = await res.json() as Record<string, unknown>;
+        errorDetail = (errorJson.detail || errorJson.message || errorJson.error || JSON.stringify(errorJson)) as string;
+      } catch {
+        errorDetail = await res.text();
+      }
       return {
         ok: false,
-        error: body || getErrorMessage("unexpected"),
+        error: errorDetail || getErrorMessage("unexpected"),
       };
     }
 
@@ -84,6 +90,7 @@ export async function buildAndDeploy(flowConfig: Record<string, unknown>) {
   return request<{
     success: boolean;
     flow?: { id: string; name: string; link: string };
+    webhook_url?: string;
     message?: string;
   }>("/v2/build-and-deploy", {
     method: "POST",
@@ -92,6 +99,46 @@ export async function buildAndDeploy(flowConfig: Record<string, unknown>) {
 }
 
 export const buildDynamic = buildAndDeploy;
+
+export async function buildDynamicFlow(config: {
+  display_name: string;
+  trigger: Record<string, unknown>;
+  actions: Record<string, unknown>[];
+  connection_ids: Record<string, string>;
+}) {
+  return request<{
+    success: boolean;
+    flow?: { id: string; name: string; link: string };
+    webhook_url?: string;
+    message?: string;
+  }>("/v2/build-dynamic", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+}
+
+export async function connectService(config: {
+  piece_name: string;
+  display_name?: string;
+  connection_config: Record<string, unknown>;
+}) {
+  return request<{
+    id: string;
+    pieceName: string;
+    displayName: string;
+    status: string;
+  }>("/v2/connect", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+}
+
+export async function testConnection(connectionId: string) {
+  return request<{ success: boolean; message?: string }>(
+    `/v2/connections/${encodeURIComponent(connectionId)}/test`,
+    { method: "POST" }
+  );
+}
 
 export async function manageFlow(
   flowId: string,

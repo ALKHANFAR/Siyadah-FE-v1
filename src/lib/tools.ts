@@ -169,6 +169,86 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
       required: ["sector"],
     },
   },
+  {
+    name: "connect_service",
+    description:
+      "ربط نظام خارجي (مثل Foodics, Shopify, إلخ) بسيادة. استخدمها لما العميل يطلب ربط نظام.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        piece_name: {
+          type: "string",
+          description: "اسم النظام — مثل: foodics, shopify, slack",
+        },
+        display_name: {
+          type: "string",
+          description: "اسم عرض اختياري للربط",
+        },
+        connection_config: {
+          type: "object" as const,
+          description:
+            "إعدادات الربط — مثال: {type: 'SECRET_TEXT', value: {secret_text: 'API_KEY'}}",
+        },
+      },
+      required: ["piece_name", "connection_config"],
+    },
+  },
+  {
+    name: "test_connection",
+    description:
+      "اختبر ربط نظام خارجي. استخدمها بعد connect_service للتأكد إن الربط شغّال.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        connection_id: {
+          type: "string",
+          description: "معرّف الربط اللي تبي تختبره",
+        },
+      },
+      required: ["connection_id"],
+    },
+  },
+  {
+    name: "search_available_systems",
+    description:
+      "ابحث عن الأنظمة المتاحة للربط (مثل Foodics, Shopify, Slack, إلخ). استخدمها عشان تعرف وش يقدر العميل يربط.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "build_dynamic_flow",
+    description:
+      "بناء أتمتة ديناميكية مخصصة من أي نظام متاح. هذي تفتح الباب لكل الأنظمة المتاحة مو بس القوالب الجاهزة.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        display_name: {
+          type: "string",
+          description: "اسم الأتمتة — اسم فريد يشمل نوع المهمة",
+        },
+        trigger: {
+          type: "object" as const,
+          description:
+            "المحفّز — مثل: {pieceName: 'webhook', triggerName: 'catch'}",
+        },
+        actions: {
+          type: "array" as const,
+          items: { type: "object" as const },
+          description:
+            "قائمة الأفعال — مثل: [{pieceName: 'gmail', actionName: 'send-email', input: {...}}]",
+        },
+        connection_ids: {
+          type: "object" as const,
+          description:
+            "معرّفات الربط لكل نظام — مثل: {gmail: 'conn_123'}",
+        },
+      },
+      required: ["display_name", "trigger", "actions", "connection_ids"],
+    },
+  },
 ];
 
 export async function executeTool(
@@ -200,7 +280,9 @@ export async function executeTool(
         });
       }
 
-      const connList = connections.data?.connections || (Array.isArray(connections.data) ? connections.data : []);
+      const connList = connections.ok
+        ? (connections.data?.connections || (Array.isArray(connections.data) ? connections.data : []))
+        : [];
       const connectedNames = connList
         .filter((c: any) => c.status === "ACTIVE")
         .map((c: any) => c.displayName || c.pieceName);
@@ -297,20 +379,33 @@ export async function executeTool(
         });
       }
 
+      const webhookUrl = result.data?.webhook_url
+        || (result.data?.flow?.id
+          ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${result.data.flow.id}`
+          : null);
+
       return JSON.stringify({
         success: true,
         message: `تم بناء "${flowName}" بنجاح ✅`,
         flowId: result.data?.flow?.id,
         link: result.data?.flow?.link,
-        webhookUrl: result.data?.flow?.id ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${result.data.flow.id}` : null,
+        webhookUrl,
         nextStep: "قل للعميل: تشيك إيميلك — وصلك تنبيه تجريبي. ثم اقترح الخطوة التالية.",
-        INSTRUCTION: "أنت الآن تملك دليل نجاح حقيقي. قل للعميل بالضبط وش اتبنى واعطه الـ webhook URL إذا يحتاجه.",
+        INSTRUCTION: `أنت الآن تملك دليل نجاح حقيقي. قل للعميل بالضبط وش اتبنى.${webhookUrl ? ` قل للعميل: "حط هالرابط في نظامك عشان يستقبل البيانات: ${webhookUrl}"` : ""}`,
       });
     }
 
     case "list_automations": {
       try {
         const flows = await orchestrator.listFlows();
+
+        if (!flows.ok) {
+          return JSON.stringify({
+            success: false,
+            INSTRUCTION: `حصل خطأ من النظام: "${flows.error}". لا تقول 'تم'. قل للعميل: 'واجهنا مشكلة في جلب الأتمتات — خلني أحاول مرة ثانية.'`,
+          });
+        }
+
         const flowList = flows.data?.data || (Array.isArray(flows.data) ? flows.data : []);
 
         if (flowList.length === 0) {
@@ -347,11 +442,18 @@ export async function executeTool(
       const action = input.action as "enable" | "disable" | "delete";
       const result = await orchestrator.manageFlow(flowId, action);
 
+      const actionLabel = action === "enable" ? "تفعيل" : action === "disable" ? "تعطيل" : "حذف";
+
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `فشلت عملية ${actionLabel}. الخطأ: "${result.error}". لا تقول 'تم'. قل للعميل: 'ما قدرت أنفذ — ${result.error}'`,
+        });
+      }
+
       return JSON.stringify({
-        success: result.ok,
-        message: result.ok
-          ? `تم ${action === "enable" ? "تفعيل" : action === "disable" ? "تعطيل" : "حذف"} الموظف الذكي`
-          : result.error,
+        success: true,
+        message: `تم ${actionLabel} الموظف الذكي`,
       });
     }
 
@@ -359,11 +461,16 @@ export async function executeTool(
       const flowId = input.flow_id as string;
       const result = await orchestrator.testFlow(flowId);
 
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `الاختبار فشل. الخطأ: "${result.error}". لا تقول 'تم'. قل للعميل: 'الاختبار ما نجح — ممكن فيه مشكلة بالإعدادات.'`,
+        });
+      }
+
       return JSON.stringify({
-        success: result.ok,
-        message: result.ok
-          ? "الاختبار نجح ✅"
-          : "الاختبار ما نجح. ممكن فيه مشكلة بالإعدادات.",
+        success: true,
+        message: "الاختبار نجح ✅",
       });
     }
 
@@ -403,6 +510,103 @@ export async function executeTool(
           name: s.name,
           reason: s.reason,
         })),
+      });
+    }
+
+    case "search_available_systems": {
+      const result = await orchestrator.getAvailablePieces();
+
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `ما قدرت أجلب الأنظمة المتاحة. الخطأ: "${result.error}". قل للعميل: 'واجهنا مشكلة — خلني أحاول مرة ثانية.'`,
+        });
+      }
+
+      const pieces = result.data || [];
+
+      return JSON.stringify({
+        success: true,
+        count: pieces.length,
+        systems: pieces.map((p) => ({
+          name: p.name,
+          displayName: p.displayName,
+          logo: p.logoUrl,
+        })),
+        INSTRUCTION: `عندنا ${pieces.length} نظام متاح للربط. اعرض للعميل أبرز الأنظمة المناسبة لقطاعه واقترح ربطها.`,
+      });
+    }
+
+    case "build_dynamic_flow": {
+      const displayName = input.display_name as string;
+      const trigger = input.trigger as Record<string, unknown>;
+      const actions = input.actions as Record<string, unknown>[];
+      const connectionIds = input.connection_ids as Record<string, string>;
+
+      const result = await orchestrator.buildDynamicFlow({
+        display_name: displayName,
+        trigger,
+        actions,
+        connection_ids: connectionIds,
+      });
+
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `فشل بناء الأتمتة الديناميكية. الخطأ: "${result.error}". لا تقول 'تم'. قل للعميل: 'واجهنا مشكلة — خلني أجرب طريقة ثانية.'`,
+        });
+      }
+
+      const webhookUrl = result.data?.webhook_url || null;
+
+      return JSON.stringify({
+        success: true,
+        flowId: result.data?.flow?.id,
+        webhookUrl,
+        status: "deployed",
+        INSTRUCTION: `تم بناء "${displayName}" بنجاح ✅${webhookUrl ? ` قل للعميل: "حط هالرابط في نظامك عشان يستقبل البيانات: ${webhookUrl}"` : ""}`,
+      });
+    }
+
+    case "test_connection": {
+      const connectionId = input.connection_id as string;
+      const result = await orchestrator.testConnection(connectionId);
+
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `الربط فيه مشكلة ❌ الخطأ: "${result.error}". قل للعميل: 'الربط فيه مشكلة — ممكن نحتاج نعيد الربط أو نتحقق من المفتاح.'`,
+        });
+      }
+
+      return JSON.stringify({
+        success: true,
+        INSTRUCTION: "الربط شغّال ✅ قل للعميل: 'الربط شغّال وجاهز!'",
+      });
+    }
+
+    case "connect_service": {
+      const pieceName = input.piece_name as string;
+      const displayName = input.display_name as string | undefined;
+      const connectionConfig = input.connection_config as Record<string, unknown>;
+
+      const result = await orchestrator.connectService({
+        piece_name: pieceName,
+        display_name: displayName,
+        connection_config: connectionConfig,
+      });
+
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `فشل ربط ${pieceName}. الخطأ: "${result.error}". لا تقول 'تم'. قل للعميل: 'ما قدرت أربط النظام — ${result.error}'`,
+        });
+      }
+
+      return JSON.stringify({
+        success: true,
+        connectionId: result.data?.id,
+        INSTRUCTION: `تم ربط ${result.data?.displayName || pieceName} ✅ قل للعميل: 'تم ربط ${result.data?.displayName || pieceName} بنجاح!'`,
       });
     }
 

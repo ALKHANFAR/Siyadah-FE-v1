@@ -58,6 +58,12 @@ export async function getTemplates() {
   }>("/templates");
 }
 
+export async function listFlows() {
+  return request<{
+    data: { id: string; displayName: string; status: string; created: string; publishedVersionId: string }[];
+  }>("/v2/flows");
+}
+
 export async function getTemplateById(id: string) {
   return request<Record<string, unknown>>(`/templates/${id}`);
 }

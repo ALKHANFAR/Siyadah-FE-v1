@@ -69,7 +69,7 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
         },
         name: {
           type: "string",
-          description: "اسم الموظف الذكي بالعربي",
+          description: "اسم فريد للموظف الذكي بالعربي — يشمل نوع المهمة + اسم الشركة. مثال: 'مراقب طلبات مطعم كبسة' أو 'مجمع تقارير فروع الرياض'. لا تستخدم أسماء القوالب مثل 'حفظ + تنبيه' كاسم.",
         },
         recipient_email: {
           type: "string",
@@ -86,7 +86,7 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_automations",
     description:
-      "List all current smart employees (automations) with their status",
+      "اعرض كل الموظفين الأذكياء (الأتمتات) المبنية فعلاً مع حالتها (شغّال/متوقف). استخدمها لما العميل يسأل 'وش عندي؟' أو 'وريني أتمتاتي'.",
     input_schema: {
       type: "object" as const,
       properties: {},
@@ -258,7 +258,8 @@ export async function executeTool(
         return JSON.stringify({
           success: false,
           needsSetup: true,
-          message: "أحتاج أتأكد من إعدادات النظام أول. خلني أجهّز لك الخطة وأنفذها أول ما يجهز.",
+          message: "النظام يحتاج إعداد",
+          INSTRUCTION: "النظام غير جاهز. لا تقول 'تم'. قل للعميل: 'النظام يحتاج إعداد بسيط — خلني أجهزه لك وأرجع لك.'",
           plan: {
             name: flowName,
             template,
@@ -290,9 +291,9 @@ export async function executeTool(
       if (!result.ok) {
         return JSON.stringify({
           success: false,
-          error: "ما قدرت أبني الموظف الذكي. خلني أحاول بطريقة ثانية...",
-          suggestion: "ممكن نحتاج نربط القنوات المطلوبة أول.",
+          error: "فشل البناء",
           details: result.error,
+          INSTRUCTION: "البناء فشل فعلاً. لا تقول 'تم' أبداً. قل للعميل: 'خلني أجرب طريقة ثانية' أو 'أحتاج إعداد إضافي'. لا تختلق نتائج.",
         });
       }
 
@@ -301,13 +302,44 @@ export async function executeTool(
         message: `تم بناء "${flowName}" بنجاح ✅`,
         flowId: result.data?.flow?.id,
         link: result.data?.flow?.link,
-        nextStep: "تبي أختبره الحين؟",
+        webhookUrl: result.data?.flow?.id ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${result.data.flow.id}` : null,
+        nextStep: "قل للعميل: تشيك إيميلك — وصلك تنبيه تجريبي. ثم اقترح الخطوة التالية.",
+        INSTRUCTION: "أنت الآن تملك دليل نجاح حقيقي. قل للعميل بالضبط وش اتبنى واعطه الـ webhook URL إذا يحتاجه.",
       });
     }
 
     case "list_automations": {
-      const templates = await orchestrator.getTemplates();
-      return JSON.stringify(templates.data?.templates || (Array.isArray(templates.data) ? templates.data : []));
+      try {
+        const flows = await orchestrator.listFlows();
+        const flowList = flows.data?.data || (Array.isArray(flows.data) ? flows.data : []);
+
+        if (flowList.length === 0) {
+          return JSON.stringify({
+            success: true,
+            automations: [],
+            message: "ما فيه موظفين أذكياء مبنيين بعد. تبي أبني لك أول واحد؟",
+          });
+        }
+
+        return JSON.stringify({
+          success: true,
+          automations: flowList.map((f: Record<string, unknown>) => ({
+            id: f.id,
+            name: f.displayName || f.name,
+            status: f.status,
+            created: f.created,
+          })),
+          count: flowList.length,
+          message: `عندك ${flowList.length} موظف ذكي شغّال`,
+        });
+      } catch {
+        const templates = await orchestrator.getTemplates();
+        return JSON.stringify({
+          success: true,
+          note: "عرض القوالب المتاحة (الأتمتات المبنية غير متاحة حالياً)",
+          templates: templates.data?.templates || [],
+        });
+      }
     }
 
     case "manage_automation": {

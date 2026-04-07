@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { streamChat, updateDNA, type ChatMessage } from "@/lib/claude";
+import { streamChat, updateDNA, selectModel, buildSystemPrompt, type ChatMessage } from "@/lib/claude";
 import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
@@ -31,13 +31,18 @@ export async function POST(request: NextRequest) {
       updateDNA(companyContext);
     }
 
+    const selectedModel = selectModel(messages);
+    const isCompact = selectedModel.includes("haiku");
+    const systemPrompt = buildSystemPrompt(isCompact);
+
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of streamChat(
-            messages as ChatMessage[]
+            messages as ChatMessage[],
+            { model: selectedModel, systemPrompt }
           )) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`)

@@ -232,21 +232,21 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
         trigger: {
           type: "object" as const,
           description:
-            "المحفّز — مثل: {pieceName: 'webhook', triggerName: 'catch'}",
+            "المحفّز — مثل: {type: 'webhook'}",
         },
         actions: {
           type: "array" as const,
           items: { type: "object" as const },
           description:
-            "قائمة الأفعال — مثل: [{pieceName: 'gmail', actionName: 'send-email', input: {...}}]",
+            "قائمة الأفعال — مثل: [{piece: 'gmail', action_name: 'send_email', input: {...}}]",
         },
         connection_ids: {
           type: "object" as const,
           description:
-            "معرّفات الربط لكل نظام — مثل: {gmail: 'conn_123'}",
+            "معرّفات الربط لكل نظام (اختياري) — مثل: {gmail: 'conn_123'}",
         },
       },
-      required: ["display_name", "trigger", "actions", "connection_ids"],
+      required: ["display_name", "trigger", "actions"],
     },
   },
 ];
@@ -540,15 +540,34 @@ export async function executeTool(
 
     case "build_dynamic_flow": {
       const displayName = input.display_name as string;
-      const trigger = input.trigger as Record<string, unknown>;
-      const actions = input.actions as Record<string, unknown>[];
-      const connectionIds = input.connection_ids as Record<string, string>;
+      let trigger = input.trigger as Record<string, unknown>;
+      let actions = input.actions as Record<string, unknown>[];
+      const connectionIds = input.connection_ids as Record<string, string> | undefined;
+
+      // Safety net: map camelCase → snake_case if Claude ignores description
+      if (trigger.pieceName && !trigger.type) {
+        trigger = { type: trigger.pieceName };
+      }
+
+      actions = actions.map((a) => {
+        if (a.pieceName && !a.piece) {
+          const { pieceName, actionName, ...rest } = a;
+          return {
+            ...rest,
+            piece: pieceName,
+            action_name: typeof actionName === "string" ? actionName.replace(/-/g, "_") : actionName,
+          };
+        }
+        return a;
+      });
 
       const result = await orchestrator.buildDynamicFlow({
         display_name: displayName,
         trigger,
         actions,
-        connection_ids: connectionIds,
+        ...(connectionIds && Object.keys(connectionIds).length > 0
+          ? { connection_ids: connectionIds }
+          : {}),
       });
 
       if (!result.ok) {

@@ -105,7 +105,7 @@ export async function buildDynamicFlow(config: {
   display_name: string;
   trigger: Record<string, unknown>;
   actions: Record<string, unknown>[];
-  connection_ids: Record<string, string>;
+  connection_ids?: Record<string, string>;
 }) {
   return request<{
     success: boolean;

@@ -36,6 +36,7 @@ export function buildSystemPrompt(compact: boolean = false): string {
 
 ⚠️ قواعد إلزامية:
 - إذا العميل طلب تنبيه إيميل بسيط أو حفظ في جدول → نادِ build_automation (القوالب الجاهزة: تنبيه إيميل، حفظ بجدول، حفظ+تنبيه، رد تلقائي، ترحيب، تقرير يومي، نظام ليدات).
+- إذا العميل طلب تفريعات أو توجيه ذكي أو متابعة بالسكور أو إيميلات جماعية → نادِ build_preset مع الـ preset المناسب (lead_routing, smart_followup, bulk_email, router_loop_combo).
 - إذا العميل طلب نظام متكامل أو ذكر أنظمة مثل Shopify/HubSpot/Slack/فودكس أو طلب أكثر من Gmail+Sheets → نادِ build_dynamic_flow.
 - إذا مو متأكد أيهم → نادِ search_available_systems أول عشان تعرف الأنظمة المتاحة ثم قرر.
 - إذا العميل سأل عن الأنظمة → نادِ search_available_systems. لا تخمن.
@@ -62,6 +63,7 @@ ${dna.facts.length > 0 ? `حقائق: ${dna.facts.slice(-5).join("، ")}` : ""}
   const mandatoryRules = `
 ⚠️ قواعد إلزامية — لا تكسرها أبداً:
 - إذا العميل طلب تنبيه إيميل بسيط أو حفظ في جدول → نادِ build_automation (القوالب الجاهزة: تنبيه إيميل، حفظ بجدول، حفظ+تنبيه، رد تلقائي، ترحيب، تقرير يومي، نظام ليدات).
+- إذا العميل طلب تفريعات أو توجيه ذكي أو متابعة بالسكور أو إيميلات جماعية → نادِ build_preset مع الـ preset المناسب (lead_routing, smart_followup, bulk_email, router_loop_combo).
 - إذا العميل طلب نظام متكامل أو ذكر أنظمة مثل Shopify/HubSpot/Slack/فودكس أو طلب أكثر من Gmail+Sheets → نادِ build_dynamic_flow.
 - إذا مو متأكد أيهم → نادِ search_available_systems أول عشان تعرف الأنظمة المتاحة ثم قرر.
 - إذا العميل سأل عن الأنظمة المتاحة → نادِ search_available_systems. لا تخمن.

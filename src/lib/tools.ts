@@ -219,6 +219,29 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "build_preset",
+    description:
+      "بناء سيناريو متقدم جاهز (تفريعات، تكرار، توجيه ذكي). الخيارات: lead_routing (توجيه ليدات)، bulk_email (إيميلات جماعية)، smart_followup (متابعة ذكية بالسكور)، router_loop_combo (توجيه + تكرار مركب).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description: "اسم الأتمتة",
+        },
+        preset: {
+          type: "string",
+          description: "اسم السيناريو: lead_routing, bulk_email, smart_followup, router_loop_combo",
+        },
+        params: {
+          type: "object" as const,
+          description: "إعدادات: email_to (array), hot_threshold (string), spreadsheet_id",
+        },
+      },
+      required: ["name", "preset"],
+    },
+  },
+  {
     name: "build_dynamic_flow",
     description:
       "بناء أتمتة ديناميكية مخصصة من أي نظام متاح. هذي تفتح الباب لكل الأنظمة المتاحة مو بس القوالب الجاهزة.",
@@ -538,36 +561,45 @@ export async function executeTool(
       });
     }
 
+    case "build_preset": {
+      const name = input.name as string;
+      const preset = input.preset as string;
+      const params = (input.params || {}) as Record<string, unknown>;
+      if (!params.email_to) params.email_to = ["a@siyadah-ai.com"];
+      const result = await orchestrator.buildPreset({ name, preset, params });
+      if (!result.ok) {
+        return JSON.stringify({
+          success: false,
+          INSTRUCTION: `فشل بناء السيناريو "${preset}". الخطأ: "${result.error}". قل للعميل: 'واجهنا مشكلة — خلني أجرب طريقة ثانية.'`,
+        });
+      }
+      const flowId = result.data?.flow_id;
+      const webhookUrl = flowId
+        ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${flowId}`
+        : null;
+      return JSON.stringify({
+        success: true,
+        flowId,
+        preset,
+        webhookUrl,
+        INSTRUCTION: `تم بناء "${name}" (${preset}) بنجاح ✅${webhookUrl ? ` قل للعميل: "حط هالرابط في نظامك: ${webhookUrl}"` : ""}`,
+      });
+    }
+
     case "build_dynamic_flow": {
       const displayName = input.display_name as string;
-      let trigger = input.trigger as Record<string, unknown>;
-      let actions = input.actions as Record<string, unknown>[];
-      const connectionIds = input.connection_ids as Record<string, string> | undefined;
+      const actions = (input.actions || []) as Record<string, unknown>[];
 
-      // Safety net: map camelCase → snake_case if Claude ignores description
-      if (trigger.pieceName && !trigger.type) {
-        trigger = { type: trigger.pieceName };
-      }
+      const steps = actions.map((a: Record<string, unknown>) => ({
+        piece_name: (a.piece || a.pieceName || a.piece_name) as string,
+        action_name: (a.action_name || a.actionName || a.action || "").toString().replace(/-/g, "_"),
+        input_config: (a.input || a.input_config || {}) as Record<string, unknown>,
+      }));
 
-      actions = actions.map((a) => {
-        if (a.pieceName && !a.piece) {
-          const { pieceName, actionName, ...rest } = a;
-          return {
-            ...rest,
-            piece: pieceName,
-            action_name: typeof actionName === "string" ? actionName.replace(/-/g, "_") : actionName,
-          };
-        }
-        return a;
-      });
-
-      const result = await orchestrator.buildDynamicFlow({
+      const result = await orchestrator.buildSmart({
         display_name: displayName,
-        trigger,
-        actions,
-        ...(connectionIds && Object.keys(connectionIds).length > 0
-          ? { connection_ids: connectionIds }
-          : {}),
+        description: (input.description as string) || displayName,
+        steps,
       });
 
       if (!result.ok) {
@@ -577,15 +609,14 @@ export async function executeTool(
         });
       }
 
-      const dynFlowId = result.data?.flow_id || result.data?.flow?.id;
-      const webhookUrl = result.data?.webhook_url
-        || (dynFlowId
-          ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${dynFlowId}`
-          : null);
+      const flowId = result.data?.flow_id;
+      const webhookUrl = flowId
+        ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${flowId}`
+        : null;
 
       return JSON.stringify({
         success: true,
-        flowId: dynFlowId,
+        flowId,
         webhookUrl,
         status: "deployed",
         INSTRUCTION: `تم بناء "${displayName}" بنجاح ✅${webhookUrl ? ` قل للعميل: "حط هالرابط في نظامك عشان يستقبل البيانات: ${webhookUrl}"` : ""}`,

@@ -119,6 +119,40 @@ export async function buildDynamicFlow(config: {
   });
 }
 
+export async function buildSmart(config: {
+  display_name: string;
+  description?: string;
+  steps: { piece_name: string; action_name: string; input_config: Record<string, unknown> }[];
+}) {
+  return request<{
+    status: string;
+    flow_id: string;
+    type: string;
+    steps: { step: string; piece: string; action: string; version: string; schema_loaded: boolean }[];
+    publish: { status: string };
+  }>("/v2/build-smart", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+}
+
+export async function buildPreset(config: {
+  name: string;
+  preset: string;
+  params: Record<string, unknown>;
+}) {
+  return request<{
+    success: boolean;
+    flow_id: string;
+    type: string;
+    preset: string;
+    publish: { status: string };
+  }>("/v2/build-preset", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+}
+
 export async function connectService(config: {
   piece_name: string;
   display_name?: string;

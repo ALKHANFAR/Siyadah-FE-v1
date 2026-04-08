@@ -280,9 +280,8 @@ export async function executeTool(
         });
       }
 
-      const connList = connections.ok
-        ? (connections.data?.connections || (Array.isArray(connections.data) ? connections.data : []))
-        : [];
+      const rawConns = connections.ok ? (connections.data?.connections ?? connections.data) : [];
+      const connList = Array.isArray(rawConns) ? rawConns : [];
       const connectedNames = connList
         .filter((c: any) => c.status === "ACTIVE")
         .map((c: any) => c.displayName || c.pieceName);
@@ -379,15 +378,16 @@ export async function executeTool(
         });
       }
 
+      const flowId = result.data?.flow_id || result.data?.flow?.id;
       const webhookUrl = result.data?.webhook_url
-        || (result.data?.flow?.id
-          ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${result.data.flow.id}`
+        || (flowId
+          ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${flowId}`
           : null);
 
       return JSON.stringify({
         success: true,
         message: `تم بناء "${flowName}" بنجاح ✅`,
-        flowId: result.data?.flow?.id,
+        flowId,
         link: result.data?.flow?.link,
         webhookUrl,
         nextStep: "قل للعميل: تشيك إيميلك — وصلك تنبيه تجريبي. ثم اقترح الخطوة التالية.",
@@ -406,7 +406,8 @@ export async function executeTool(
           });
         }
 
-        const flowList = flows.data?.data || (Array.isArray(flows.data) ? flows.data : []);
+        const rawData = flows.data?.data ?? flows.data;
+        const flowList = Array.isArray(rawData) ? rawData : [];
 
         if (flowList.length === 0) {
           return JSON.stringify({
@@ -523,7 +524,7 @@ export async function executeTool(
         });
       }
 
-      const pieces = result.data || [];
+      const pieces = Array.isArray(result.data) ? result.data : [];
 
       return JSON.stringify({
         success: true,
@@ -557,11 +558,15 @@ export async function executeTool(
         });
       }
 
-      const webhookUrl = result.data?.webhook_url || null;
+      const dynFlowId = result.data?.flow_id || result.data?.flow?.id;
+      const webhookUrl = result.data?.webhook_url
+        || (dynFlowId
+          ? `https://activepieces-production-2499.up.railway.app/api/v1/webhooks/${dynFlowId}`
+          : null);
 
       return JSON.stringify({
         success: true,
-        flowId: result.data?.flow?.id,
+        flowId: dynFlowId,
         webhookUrl,
         status: "deployed",
         INSTRUCTION: `تم بناء "${displayName}" بنجاح ✅${webhookUrl ? ` قل للعميل: "حط هالرابط في نظامك عشان يستقبل البيانات: ${webhookUrl}"` : ""}`,

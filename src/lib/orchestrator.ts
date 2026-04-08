@@ -89,6 +89,7 @@ export async function getPieceSchema(pieceName: string) {
 export async function buildAndDeploy(flowConfig: Record<string, unknown>) {
   return request<{
     success: boolean;
+    flow_id?: string;
     flow?: { id: string; name: string; link: string };
     webhook_url?: string;
     message?: string;
@@ -108,6 +109,7 @@ export async function buildDynamicFlow(config: {
 }) {
   return request<{
     success: boolean;
+    flow_id?: string;
     flow?: { id: string; name: string; link: string };
     webhook_url?: string;
     message?: string;

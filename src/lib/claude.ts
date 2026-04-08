@@ -42,6 +42,7 @@ export function buildSystemPrompt(compact: boolean = false): string {
 - لو العميل طلب شي معقد → build_dynamic_flow مع steps كثيرة.
 - لو العميل ذكر نظام غير Gmail/Sheets → تحقق من الربط (get_system_status) وأخبره لو يحتاج يربط.
 - لا تختلق أرقام أو أسماء عملاء — استخدم XXX ومثال توضيحي.
+- قبل ما تبني flow معقد بـ build_dynamic_flow → نادِ get_piece_schema لكل piece تبي تستخدمها عشان تعرف الـ actions والحقول الصحيحة. لا تخمّن أسماء الـ actions.
 
 ${dna.name ? `العميل: ${dna.name} (${sector.nameAr}). ألمه: "${sector.pain}". حلمه: "${sector.dream}"` : "اسأل عن الشركة أو الرابط."}
 ${dna.facts.length > 0 ? `حقائق: ${dna.facts.slice(-5).join("، ")}` : ""}
@@ -64,6 +65,7 @@ ${dna.facts.length > 0 ? `حقائق: ${dna.facts.slice(-5).join("، ")}` : ""}
 - لو العميل طلب شي معقد → build_dynamic_flow مع steps كثيرة.
 - لو العميل ذكر نظام غير Gmail/Sheets → تحقق من الربط (get_system_status) وأخبره لو يحتاج يربط.
 - لا تختلق أرقام أو أسماء عملاء — استخدم XXX ومثال توضيحي.
+- قبل ما تبني flow معقد بـ build_dynamic_flow → نادِ get_piece_schema لكل piece تبي تستخدمها عشان تعرف الـ actions والحقول الصحيحة. لا تخمّن أسماء الـ actions.
 `;
 
   const identity = `

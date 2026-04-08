@@ -242,6 +242,22 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "get_piece_schema",
+    description:
+      "جلب تفاصيل أي أداة أتمتة — الـ actions المتاحة والحقول المطلوبة. استخدمها قبل build_dynamic_flow عشان تعرف وش الـ steps الصحيحة.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        piece_name: {
+          type: "string",
+          description:
+            "اسم الأداة: gmail, google-sheets, slack, shopify, hubspot, stripe, http, telegram-bot, discord, airtable, notion",
+        },
+      },
+      required: ["piece_name"],
+    },
+  },
+  {
     name: "build_dynamic_flow",
     description:
       "بناء أتمتة ديناميكية مخصصة من أي نظام متاح. هذي تفتح الباب لكل الأنظمة المتاحة مو بس القوالب الجاهزة.",
@@ -583,6 +599,22 @@ export async function executeTool(
         preset,
         webhookUrl,
         INSTRUCTION: `تم بناء "${name}" (${preset}) بنجاح ✅${webhookUrl ? ` قل للعميل: "حط هالرابط في نظامك: ${webhookUrl}"` : ""}`,
+      });
+    }
+
+    case "get_piece_schema": {
+      const pieceName = input.piece_name as string;
+      const result = await orchestrator.getPieceSchema(pieceName);
+      if (!result.ok) {
+        return JSON.stringify({ success: false, error: result.error });
+      }
+      const data = result.data as Record<string, unknown> | undefined;
+      return JSON.stringify({
+        success: true,
+        piece: data?.piece,
+        actions: data?.actions,
+        INSTRUCTION:
+          "الحين تعرف الـ actions والحقول المطلوبة. استخدمها في build_dynamic_flow.",
       });
     }
 
